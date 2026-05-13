@@ -8,78 +8,77 @@ const GeneradorGuardias = () => {
   const [cargando, setCargando] = useState(false);
 
   const generarMesCompleto = async () => {
-    setCargando(true);
-    
-    // 1. Obtener personal que no esté de licencia
-    const { data: personal } = await supabase
-      .from('empleados')
-      .select('*')
-      .eq('en_licencia', false);
+  setCargando(true);
+  
+  // 1. Obtener TODO el personal (asegurarse de que la columna coincida con Supabase)
+  // Usamos 'en_licencia' como en tu tabla
+  const { data: personal, error } = await supabase
+    .from('empleados')
+    .select('*')
+    .eq('actvio', false);
 
-    if (!personal || personal.length === 0) {
-      alert("No hay personal disponible.");
-      setCargando(false);
-      return;
-    }
-
-    const diasEnMes = new Date(anio, mes, 0).getDate();
-    const sorteoMensual = [];
-    
-    // 2. Control de equidad: Lista de "pendientes" para asegurar que todos tengan al menos una
-    let pendientesDeGuardia = [...personal];
-    
-    // Función auxiliar para elegir candidato respetando restricciones y equidad
-    const elegirCandidato = (turnoActual, excluidosEnDia = []) => {
-      // Filtrar por restricción horaria y que no haya sido sorteado el mismo día en otro turno
-      let candidatosPosibles = personal.filter(p => 
-        p.restriccion_horaria !== turnoActual && 
-        !excluidosEnDia.includes(p.id)
-      );
-
-      // Prioridad: Gente que aún no tuvo ninguna guardia este mes
-      let prioridad = candidatosPosibles.filter(p => 
-        pendientesDeGuardia.some(pend => pend.id === p.id)
-      );
-
-      let pool = prioridad.length > 0 ? prioridad : candidatosPosibles;
-      
-      if (pool.length === 0) return { nombre: 'SIN PERSONAL', legajo: '-' };
-
-      const seleccionado = pool[Math.floor(Math.random() * pool.length)];
-      
-      // Si salió de la lista de pendientes, lo sacamos
-      pendientesDeGuardia = pendientesDeGuardia.filter(p => p.id !== seleccionado.id);
-      
-      return {
-        id: seleccionado.id,
-        texto: `${seleccionado.apellido} ${seleccionado.nombre}`,
-        lp: seleccionado.legajo
-      };
-    };
-
-    // 3. Generar la grilla
-    for (let dia = 1; dia <= diasEnMes; dia++) {
-      let idsEnDia = [];
-
-      const m = elegirCandidato('7-14', idsEnDia);
-      if (m.id) idsEnDia.push(m.id);
-
-      const t = elegirCandidato('14-21', idsEnDia);
-      if (t.id) idsEnDia.push(t.id);
-
-      const n = elegirCandidato('21-07', idsEnDia);
-
-      sorteoMensual.push({
-        dia,
-        mañana: m,
-        tarde: t,
-        noche: n
-      });
-    }
-
-    setResultado(sorteoMensual);
+  if (error || !personal || personal.length === 0) {
+    alert("Error: No hay personal activo en la base de datos.");
     setCargando(false);
+    return;
+  }
+
+  const diasEnMes = new Date(anio, mes, 0).getDate();
+  const sorteoMensual = [];
+  let pendientesDeGuardia = [...personal];
+  
+  const elegirCandidato = (turnoActual, excluidosEnDia = []) => {
+    // FILTRO CLAVE: 
+    // 1. No debe tener ese turno como 'ordinario' (ya está trabajando)
+    // 2. No debe tener una 'restriccion_horaria' manual en ese turno
+    // 3. No debe haber sido sorteado ya en otro turno el mismo día
+    let candidatosPosibles = personal.filter(p => 
+      p.turno_ordinario !== turnoActual && 
+      p.restriccion_horaria !== turnoActual && 
+      !excluidosEnDia.includes(p.id)
+    );
+
+    // Prioridad por equidad (gente que aún no hizo guardias)
+    let prioridad = candidatosPosibles.filter(p => 
+      pendientesDeGuardia.some(pend => pend.id === p.id)
+    );
+
+    let pool = prioridad.length > 0 ? prioridad : candidatosPosibles;
+    
+    // Si el pool sigue vacío, buscamos cualquier persona que no esté en el mismo día
+    if (pool.length === 0) {
+      pool = personal.filter(p => !excluidosEnDia.includes(p.id));
+    }
+
+    if (pool.length === 0) return { texto: 'SIN PERSONAL', lp: '-' };
+
+    const seleccionado = pool[Math.floor(Math.random() * pool.length)];
+    
+    // Actualizar lista de pendientes para la siguiente vuelta
+    pendientesDeGuardia = pendientesDeGuardia.filter(p => p.id !== seleccionado.id);
+    if (pendientesDeGuardia.length === 0) pendientesDeGuardia = [...personal]; 
+    
+    return {
+      id: seleccionado.id,
+      texto: `${seleccionado.apellido} ${seleccionado.nombre}`,
+      lp: seleccionado.legajo
+    };
   };
+
+  for (let dia = 1; dia <= diasEnMes; dia++) {
+    let idsEnDia = [];
+    const m = elegirCandidato('7-14', idsEnDia);
+    if (m.id) idsEnDia.push(m.id);
+    const t = elegirCandidato('14-21', idsEnDia);
+    if (t.id) idsEnDia.push(t.id);
+    const n = elegirCandidato('21-07', idsEnDia);
+
+    sorteoMensual.push({ dia, mañana: m, tarde: t, noche: n });
+  }
+
+  setResultado(sorteoMensual);
+  setCargando(false);
+};
 
   return (
     <div className="space-y-4">
