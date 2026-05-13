@@ -15,7 +15,7 @@ const GeneradorGuardias = () => {
   const { data: personal, error } = await supabase
     .from('empleados')
     .select('*')
-    .eq('actvio', false);
+    .eq('actvio', true);
 
   if (error || !personal || personal.length === 0) {
     alert("Error: No hay personal activo en la base de datos.");
