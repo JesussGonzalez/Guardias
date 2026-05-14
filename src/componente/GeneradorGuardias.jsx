@@ -10,15 +10,14 @@ const GeneradorGuardias = () => {
   const generarMesCompleto = async () => {
   setCargando(true);
   
-  // 1. Obtener TODO el personal (asegurarse de que la columna coincida con Supabase)
-  // Usamos 'en_licencia' como en tu tabla
   const { data: personal, error } = await supabase
     .from('empleados')
     .select('*')
-    .eq('actvio', true);
+    .eq('activo', false); // Cambiamos 'actvio' por 'activo' y true por false
 
   if (error || !personal || personal.length === 0) {
-    alert("Error: No hay personal activo en la base de datos.");
+    console.error("Error de Supabase:", error);
+    alert("Error: No se encontró personal disponible.");
     setCargando(false);
     return;
   }
